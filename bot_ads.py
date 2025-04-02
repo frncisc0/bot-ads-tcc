@@ -14,19 +14,19 @@ from telegram.ext import (
 import sqlite3
 from datetime import datetime
 
-# --- Verificação e Instalação de Dependências ---
+# --- 🔹 Verificação e Instalação de Dependências ---
 try:
     from dotenv import load_dotenv
 except ImportError:
     import subprocess
-    print("Instalando python-dotenv...")
+    print(" Instalando python-dotenv...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "python-dotenv"])
     from dotenv import load_dotenv
 
-# --- Configuração Inicial ---
+# ---  Configuração Inicial ---
 load_dotenv()
 
-# Variáveis de ambiente
+#  Variáveis de ambiente
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
@@ -37,52 +37,54 @@ if not TOKEN or not OPENROUTER_API_KEY:
         "OPENROUTER_API_KEY=sua_chave_aqui"
     )
 
-# --- Constantes ---
-# --- Configurações da API ---
+# --- 🔹 Configuração da API OpenRouter ---
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-SYSTEM_PROMPT = """Você é o Assistente IA, um sistema de inteligência artificial desenvolvido para o Telegram como parte do Trabalho de Conclusão de Curso (TCC) de Francisco Dantas
-no curso de Análise e Desenvolvimento de Sistemas. Que as vezes fala alguma coisa engraçada no final das frases.
 
-Objetivo principal:
-- Fornecer suporte acadêmico para disciplinas do curso de ADS
-- Auxiliar na compreensão de conceitos técnicos
-- Servir como estudo de caso para implementação de IA em ambientes educacionais
+SYSTEM_PROMPT = SYSTEM_PROMPT = """Você é o Assistente ADS, um chatbot educacional criado para apoiar estudantes de Análise e Desenvolvimento de Sistemas (ADS). 
+Seu objetivo é fornecer respostas técnicas e precisas sobre temas relacionados ao curso, promovendo o aprendizado interativo.
 
-Funcionalidades:
-✓ Respostas técnicas sobre programação (Python, Java, C#, etc.)
-✓ Explicações sobre banco de dados, redes e engenharia de software
-✓ Suporte para metodologias ágeis e boas práticas de desenvolvimento
+🎯 *Objetivo Principal:*
+- Auxiliar estudantes de ADS na compreensão de conceitos técnicos.
+- Responder dúvidas sobre programação, banco de dados, engenharia de software e análise de sistemas
+- Servir como estudo de caso para implementação de IA em ambientes educacionais.
 
-Informações relevantes para o TCC:
-⌛ Cronograma: 
-   - Data limite para entrega: 30 de Junho de 2025
-📑 Normas técnicas: 
-   - [Documentação completa disponível aqui](https://exemplo.com/normas)
-👨‍🏫 Orientação: 
-   - Professor orientador: Nilton Mattos
-   - Contato: niltoncmattos@yahoo.com.br
+🛠️ *Funcionalidades:*
+✅ Respostas técnicas sobre linguagens de programação (Python, Java, C#, etc.).
+✅ Explicações sobre banco de dados (SQL, NoSQL) e modelagem de dados.
+✅ Suporte para redes de computadores e segurança da informação.
+✅ Informações sobre desenvolvimento de software e boas práticas.
+✅ Breves comentários descontraídos ao final das respostas para manter o tom amigável. 🤖✨
 
-Observação: Todas as interações serão registradas de forma anônima,
-para fins de pesquisa e avaliação do sistema.
+📌 *Informações Relevantes para o TCC:*
+⌛ *Cronograma:*  
+   - Data limite para entrega: 10 de Junho de 2025  
+📑 *Normas Técnicas:*  
+   - [Acesse as normas ABNT](https://www.fatecoswaldocruz.edu.br/normas-tcc)  
+👨‍🏫 *Orientação:*  
+   - Professor orientador: Nilton Mattos  
+   - Contato: niltoncmattos@yahoo.com.br  
+
+📢 *Observação:*  
+Todas as interações são registradas de forma anônima para fins de pesquisa e avaliação do sistema.  
 """
 
-# --- Configuração de Log ---
+# --- 🔹 Configuração de Log ---
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    handlers=[
-        logging.FileHandler("bot.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler("bot.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
-# --- Funções da API ---
+# --- 🔹 Função para Consultar a API da IA ---
 async def get_ai_response(prompt: str) -> str:
+    """
+    Consulta a API OpenRouter para obter uma resposta baseada na IA.
+    """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "HTTP-Referer": "https://github.com/seu-usuario/seu-bot-ads",
-        "X-Title": "Bot de ADS"
+        "X-Title": "Bot de ADS",
     }
     
     payload = {
@@ -102,14 +104,17 @@ async def get_ai_response(prompt: str) -> str:
             return response.json()["choices"][0]["message"]["content"]
             
     except httpx.TimeoutException:
-        logger.error("Timeout na API OpenRouter")
-        return "⏳ O servidor demorou muito para responder. Tente novamente!"
-    except Exception as e:
-        logger.error(f"Erro na API: {traceback.format_exc()}")
-        return "❌ Problema temporário. Use /tcc para informações locais."
-    
-# --- BANCO DE DADOS ---
+        logger.error("⏳ Timeout na API OpenRouter")
+        return "⚠️ O servidor demorou muito para responder. Tente novamente mais tarde!"
+    except Exception:
+        logger.error(f"❌ Erro na API: {traceback.format_exc()}")
+        return "❌ Houve um problema ao acessar a IA. Use /tcc para mais informações."
+
+# --- 🔹 BANCO DE DADOS (SQLite) ---
 def init_db():
+    """
+    Inicializa o banco de dados SQLite e cria as tabelas necessárias.
+    """
     conn = sqlite3.connect('bot.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -130,110 +135,87 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    print("Banco de dados inicializado!") 
+    print("✅ Banco de dados inicializado!") 
 
-# --- Handlers ---
+# --- 🔹 Handlers (Respostas do Bot) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Mensagem de boas-vindas quando o usuário inicia o bot.
+    """
     welcome_msg = (
-         "👋 *Assistente ADS*\n"
-        "Digite sua dúvida ou use:\n"
-        "/tcc - Informações TCC\n"
-        "/sobre - Detalhes do projeto\n\n"
-        "Ex: \"Como fazer um diagrama de classes?\""
+        "👋 *Assistente ADS*\n\n"
+        "Digite sua dúvida ou use os comandos abaixo:\n"
+        "📌 /tcc - Informações sobre o TCC\n"
+        "📌 /sobre - Detalhes do projeto\n\n"
+        "Exemplo de pergunta: \"Como fazer um diagrama de classes?\""
     )
     await update.message.reply_text(welcome_msg, parse_mode="Markdown")
 
 async def sobre(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Exibe informações sobre o projeto de TCC e sua tecnologia.
+    """
     sobre_msg = (
-        "🎓 *PROJETO DE TCC - ADS*\n"
-        "Faculdade Oswaldo Cruz\n\n"
-        
-        "🧑‍💻 *Desenvolvido por:*\n"
-        "Francisco F. Dantas (RA: 7523006)\n\n"    
-        
-        "👨‍🏫 *Orientação:*\n"
-        "Prof. Nilton\n\n"
-        
-        "📆 *Cronograma:*\n"
-        "Previsão de conclusão: Junho/2025\n\n"
-        
-        "🤖 *Tecnologias Utilizadas:*\n"
-        "- Plataforma: Telegram Bot API\n"
-        "- IA: DeepSeek Chat (via OpenRouter)\n"
-        "- Linguagem: Python 3.12\n"
-        "- Infraestrutura: Render (Cloud)\n\n"
-        
-        "📝 *Objetivos Acadêmicos:*\n"
-        "1. Integrar IA generativa no apoio educacional\n"
-        "2. Automatizar respostas sobre conteúdo de ADS\n"
-        "3. Demonstrar aplicações práticas de NLP\n\n"
-        
-        "🔗 *Repositório:* [GitHub](https://github.com/frncisc0)\n"
+        "🎓 *PROJETO DE TCC - ADS*\n\n"
+        "🧑‍💻 *Desenvolvido por:* Francisco F. Dantas\n"
+        "👨‍🏫 *Orientação:* Prof. Nilton Mattos\n"
+        "📆 *Entrega:* Junho/2025\n\n"
+        "🤖 *Tecnologias:* Python, Telegram API, OpenRouter AI, Render (Cloud)\n\n"
+        "🔗 *GitHub:* [Clique aqui](https://github.com/frncisc0)\n"
         "📧 *Contato:* franciscofreitas9022@gmail.com"
     )
-    await update.message.reply_text(sobre_msg, parse_mode="Markdown", 
-                                 disable_web_page_preview=True)
+    await update.message.reply_text(sobre_msg, parse_mode="Markdown", disable_web_page_preview=True)
 
 async def tcc_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Retorna informações sobre prazos e normas do TCC.
+    """
     info = (
         "📘 *TCC - Informações Oficiais*\n\n"
-        "⏳ *Prazo de Entrega:* 10/06/2025\n"
-        "📑 *Normas ABNT:* [Manual Completo](https://www.fatecoswaldocruz.edu.br/normas-tcc)\n"
-        "👨‍🏫 *Orientador:* Prof. Dr. Nilton\n\n"
-        "📌 *Requisitos Técnicos:*\n"
-        "- Documentação completa do sistema\n"
-        "- Artigo acadêmico (15-20 páginas)\n"
-        "- Apresentação pública\n\n"
-        "💡 *Dúvidas?* Envie sua pergunta ou use /sobre para detalhes do projeto."
+        "⏳ *Prazo Final:* 10/06/2025\n"
+        "📑 *Normas ABNT:* [Acesse aqui](https://www.fatecoswaldocruz.edu.br/normas-tcc)\n"
+        "👨‍🏫 *Orientador:* Prof. Nilton\n"
+        "📌 *Requisitos:* Artigo acadêmico, documentação do sistema e apresentação pública.\n\n"
+        "💡 Para dúvidas, envie sua pergunta!"
     )
     await update.message.reply_text(info, parse_mode="Markdown")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Processa as mensagens enviadas pelo usuário e retorna respostas da IA.
+    """
     try:
         user_msg = update.message.text
-        logger.info(f"Mensagem recebida: {user_msg}")
+        logger.info(f"📩 Mensagem recebida: {user_msg}")
 
-        await context.bot.send_chat_action(
-            chat_id=update.effective_chat.id,
-            action="typing"
-        )
-
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         response = await get_ai_response(user_msg)
         await update.message.reply_text(response)
-        
-    except Exception as e:
-        logger.error(f"Erro no handler: {traceback.format_exc()}")
-        await update.message.reply_text("🔧 Erro interno. Tente novamente mais tarde.")
+
+    except Exception:
+        logger.error(f"❌ Erro no handler: {traceback.format_exc()}")
+        await update.message.reply_text("⚠️ Ocorreu um erro. Tente novamente mais tarde.")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Erro não tratado: {context.error}", exc_info=True)
+    """
+    Captura erros inesperados e evita que o bot pare de funcionar.
+    """
+    logger.error(f"⚠️ Erro não tratado: {context.error}", exc_info=True)
     await update.message.reply_text("⚠️ Ocorreu um erro inesperado. Já estamos resolvendo!")
 
-# --- Configuração Principal ---
+# --- 🔹 Configuração Principal do Bot ---
 def main():
-    #Inicializa o banco de dados antes do bot
     init_db()
-
     application = Application.builder().token(TOKEN).build()
     
-    # Handlers
-    handlers = [
-        CommandHandler("start", start),
-        CommandHandler("tcc", tcc_info),
-         CommandHandler("sobre", sobre),
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-    ]
-    
-    for handler in handlers:
-        application.add_handler(handler)
-    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("tcc", tcc_info))
+    application.add_handler(CommandHandler("sobre", sobre))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
-    logger.info("Bot iniciado com sucesso!")
+
+    logger.info("🚀 Bot iniciado com sucesso!")
     application.run_polling()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logger.critical(f"Falha na inicialização: {traceback.format_exc()}")
-        sys.exit(1)
+    main()
