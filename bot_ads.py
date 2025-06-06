@@ -48,6 +48,7 @@ Sou um bot educacional criado para ajudar estudantes do curso de *Análise e Des
     NOT_REGISTERED = "👤 Você ainda não está cadastrado. Envie /start para iniciar o cadastro."
     INVALID_NAME = "Nome inválido. Por favor, digite seu nome completo:"
     INVALID_RA = "RA inválido. Por favor, insira 4 dígitos:"
+    RA_ALREADY_REGISTERED = "Este RA já está cadastrado por outro usuário. Por favor, insira um RA válido ou entre em contato com o suporte." # Nova mensagem
     REGISTRATION_SUCCESS = "✅ Cadastro realizado com sucesso!"
     REGISTRATION_ERROR = "❌ Algo deu errado no cadastro. Envie /start para reiniciar."
 
@@ -80,7 +81,7 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS alunos (
                         aluno_id INTEGER PRIMARY KEY,
                         name TEXT NOT NULL,
-                        ra TEXT NOT NULL,
+                        ra TEXT NOT NULL UNIQUE, -- Adicionado UNIQUE para o RA
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     );
                 """)
@@ -114,6 +115,10 @@ class DatabaseManager:
                 logger.info(f"👤 Cadastro/atualização de usuário: {name} (RA: {ra}) - ID: {aluno_id}")
                 return True
         except sqlite3.Error as e:
+            # Captura a exceção de RA duplicado se o UNIQUE constraint falhar
+            if "UNIQUE constraint failed: alunos.ra" in str(e):
+                logger.warning(f"❌ Tentativa de registro com RA duplicado: {ra} para aluno_id {aluno_id}")
+                return False # Indica falha devido a RA duplicado
             logger.error(f"❌ Erro ao registrar o usuário {name} (ID: {aluno_id}): {e}")
             return False
     
@@ -127,6 +132,23 @@ class DatabaseManager:
                 return result is not None and result[0] is not None
         except sqlite3.Error as e:
             logger.error(f"❌ Erro ao verificar se o usuário {aluno_id} está registrado: {e}")
+            return False
+
+    def is_ra_registered(self, ra: str, current_aluno_id: Optional[int] = None) -> bool:
+        """
+        Verifica se um RA já está registrado no banco de dados,
+        opcionalmente ignorando o aluno_id atual.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if current_aluno_id:
+                    cursor.execute("SELECT 1 FROM alunos WHERE ra = ? AND aluno_id != ?", (ra, current_aluno_id))
+                else:
+                    cursor.execute("SELECT 1 FROM alunos WHERE ra = ?", (ra,))
+                return cursor.fetchone() is not None
+        except sqlite3.Error as e:
+            logger.error(f"❌ Erro ao verificar duplicidade de RA '{ra}': {e}")
             return False
     
     def get_user_info(self, aluno_id: int) -> Optional[Dict[str, Any]]:
@@ -173,6 +195,7 @@ def validate_name(name: str) -> Tuple[bool, str]:
     if len(name) < 3:
         return False, "Nome muito curto. Digite pelo menos 3 caracteres."
     
+    # Atualizado para permitir espaços
     if not re.match(r"^[A-Za-zÀ-ÿ\s]{3,50}$", name):
         return False, "Nome deve conter apenas letras e espaços."
     
@@ -206,7 +229,8 @@ Seu objetivo é fornecer respostas técnicas e precisas sobre temas relacionados
 - Auxiliar estudantes de ADS na compreensão de conceitos técnicos.
 - Responder dúvidas sobre programação, banco de dados, engenharia de software e análise de sistemas.
 - Servir como estudo de caso para implementação de IA em ambientes educacionais.
-- Se a pergunta estiver fora desse escopo, responda educadamente (com simpatia e leveza): "Desculpe, só posso responder dúvidas relacionadas à área de TI."
+- Se a pergunta estiver fora do escopo EXCLUSIVO do curso de Análise e Desenvolvimento de Sistemas (ADS), responda educadamente
+ (com simpatia e leveza): "Desculpe, só posso responder dúvidas relacionadas à área de TI."
 """
     
     async def get_response(self, prompt: str, max_retries: int = 3) -> str:
@@ -294,13 +318,25 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def get_ra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Processa o RA fornecido pelo usuário."""
     ra = update.message.text.strip()
+    user_id = update.message.from_user.id
+
     is_valid, error_message = validate_ra(ra)
     
     if not is_valid:
         await update.message.reply_text(error_message)
         return ConversationStates.RA
     
-    user_id = update.message.from_user.id
+    # --- NOVA CHECAGEM DE DUPLICIDADE DE RA ---
+    if db_manager.is_ra_registered(ra, current_aluno_id=user_id):
+        logger.info(f"Tentativa de cadastro com RA duplicado: {ra} por user_id {user_id}")
+        await update.message.reply_text(Messages.RA_ALREADY_REGISTERED)
+        # Opcional: Reiniciar o cadastro ou pedir outro RA
+        # Para forçar o reinício do cadastro, descomente a linha abaixo e remova 'return ConversationStates.RA'
+        # context.user_data.pop("em_cadastro", None)
+        # return ConversationHandler.END # Encerra a conversa atual
+        return ConversationStates.RA # Permite que o usuário tente digitar o RA novamente
+    # --- FIM DA NOVA CHECAGEM ---
+    
     name = context.user_data.get("name")
     
     if not name:
@@ -318,6 +354,8 @@ async def get_ra(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             "📌 Comandos disponíveis:\n/start - Reiniciar\n/sobre - Sobre o projeto\n/tcc - Informações do TCC"
         )
     else:
+        # Este 'else' será acionado se o register_user falhar por alguma outra razão (ex: erro de DB)
+        # Para RA duplicado, já foi tratado acima.
         await update.message.reply_text("❌ Erro ao realizar cadastro. Tente novamente mais tarde.")
     
     return ConversationHandler.END
